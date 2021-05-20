@@ -11,13 +11,14 @@ app.use(cors())
 app.use(express.json());
 require('dotenv').config()
 
+var temp = -1
 var currentYear = new Date().getFullYear()
 var currentMonth = new Date().getMonth();
 currentMonth = currentMonth + 1
 let date = new Date().getDate()
 let today = currentMonth + "-" + date + "-" + currentYear
 console.log("today is date ", today)
-// let todayDay = moment(today).format('dddd')
+let todayDay = moment(today).format('dddd')
 // console.log("today is ", todayDay)
 
 const firebaseConfig = {
@@ -33,33 +34,88 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig)
 
-var temp = -1
 
 async function test() {
-    schedule.scheduleJob('50 14 23 * * *', function () {
 
-    firebase.database().ref("/Attendance").on("value", (res) => {
-        const attendanceObj = res.val() // complete attendance data
-        firebase.database().ref("/Users").on("value", (res) => {
-            const users = res.val() //all users data
-            var userUids = [];
-            Object.values(users).map((item, index) => {
-                if (item.isVerified && item.role === "Authorized") {
-                    userUids.push(item.uid) // filtered verified and excluded admin and unverified users data
-                }
-            })
-            userUids && userUids.map((uid, index) => {
-                temp = ++temp;
-                if (attendanceObj[uid] && attendanceObj[uid][currentYear] && attendanceObj[uid][currentYear][currentMonth] && (attendanceObj[uid][currentYear][currentMonth][today]) && temp > userUids.length) {
-                     console.log("present people are ",uid, "while temp is ", temp, "and total users are ", userUids.length)
-                } else {
-                    console.log("Absent users are", uid, "while temp is ", temp, "and total users are ", userUids.length)
-                }
+    //working for absent / holiday
+    schedule.scheduleJob('20 04 01 * * *', function () {
+        console.log("API called for marking absent") //absent API
+        firebase.database().ref("/Attendance").on("value", (res) => {
+            let userUids = [];
+            const attendanceObj = res.val() // complete attendance data
+            firebase.database().ref("/Users").on("value", (res) => {
+                const users = res.val() //all users data
+                Object.values(users).map((item, index) => {
+                    if (item.isVerified && item.role === "Authorized") {
+                        userUids.push(item.uid) // filtered verified and excluded admin and unverified users data
+                    }
+                })
+                userUids && userUids.map((uid, index) => {
+                    temp = ++temp;
+                    if (attendanceObj[uid] && attendanceObj[uid][currentYear] && attendanceObj[uid][currentYear][currentMonth] && (attendanceObj[uid][currentYear][currentMonth][today]) && !(temp === userUids.length || temp > userUids.length)) {
+                        console.log(`Mr ${users[uid].firstName} ${' '} ${users[uid].lastName} , vide UID # ${uid} is present`)
+                    } else if (!attendanceObj[uid] || (attendanceObj[uid] && !(attendanceObj[uid][currentYear] && attendanceObj[uid][currentYear][currentMonth] && attendanceObj[uid][currentYear][currentMonth][today] && attendanceObj[uid][currentYear][currentMonth][today]["checkedin"]) && users[uid]["weekEnd"] === todayDay && !(temp === userUids.length || temp > userUids.length))) {
+                        // firebase.database().ref(`/Attendance/${uid}/${currentYear}/${currentMonth}/${today}`).set("Holiday")
+                        console.log(`Mr ${users[uid].firstName} , vide UID # ${uid} is on nweekend today : ${today} ${todayDay}`)
+                    } else if (!attendanceObj[uid] || (attendanceObj[uid] && !(attendanceObj[uid][currentYear] && attendanceObj[uid][currentYear][currentMonth] && attendanceObj[uid][currentYear][currentMonth][today] && attendanceObj[uid][currentYear][currentMonth][today]["checkedin"])) && !(temp === userUids.length || temp > userUids.length)) {
+                        // firebase.database().ref(`/Attendance/${uid}/${currentYear}/${currentMonth}/${today}`).set("Absent")
+                        console.log(`Mr ${users[uid].firstName} , vide UID # ${uid} is absent today : ${today} ${todayDay}`)
+                    }
+                })
             })
         })
+
     })
 
-})
+    // working for late at 05 07 means 12:05 pm
+    schedule.scheduleJob('01 02 01 * * *', function () {
+        console.log('API called for Marking late')
+
+        firebase.database().ref("/Attendance").on("value", (res) => {
+            let userUids = [];
+            const attendanceObj = res.val()
+            firebase.database().ref("/Users").on("value", (res) => {
+                const users = res.val()
+                Object.values(users).map((item, index) => {
+                    if (item.isVerified && item.role === "Authorized") {
+                        userUids.push(item.uid) // filtered verified and excluded admin and unverified users data
+                    }
+                })
+                userUids && userUids.map((uid, index) => {
+                    temp = ++temp;
+                    let uuid = uid
+
+                    if (attendanceObj[uid] && !(attendanceObj[uid][currentYear] && attendanceObj[uid][currentYear][currentMonth] && attendanceObj[uid][currentYear][currentMonth][today]) && temp < userUids.length) {
+                        console.log(`${users[uid].email} is late at number ${temp} while total staff strength is ${userUids.length}`)
+                    } else {
+                        // console.log(users[uid].email, "is on time")
+                        // firebase.database().ref(`/Attendance/${uid}/${currentYear}/${currentMonth}/${today}`).update({
+                        //     isLate: true
+                        // })
+                        //transporter.sendMail({
+                        //from: process.env.EMAIL, // sender address
+                        //// to: users[uid].email, // list of receivers
+                        //to: 'muhammadfarhan012345@gmail.com',  
+                        //subject: `Late Alert - ${users[uid].firstName} + " " + ${users[uid].lastName} Attendance Management System - Computing Yard `, // Subject line
+                        // // text: `Late Alert of ${users[uid].firstName} + " " + ${users[uid].lastName}`, // plain text body
+                        //html: `<b>Dear ${users[uid].firstName} + " " + ${users[uid].lastName} , You are late for ${today}</b>
+
+                        //   <br/>
+                        //   REGARDS,
+                        //   COMPUTING YARD
+                        //   ATTENDANCE MANAGEMENT SYSTEM
+                        //   `, // html body
+                        //             });
+
+                    }
+                })
+            })
+        })
+
+    })
+
+
+
     // const transporter = nodemailer.createTransport({
     //     host: 'smtp.gmail.com',
     //     port: 465,
