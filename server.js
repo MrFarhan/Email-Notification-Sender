@@ -45,7 +45,7 @@ async function test() {
             var userUids = [];
             Object.values(users).map((item, index) => {
                 if (item.isVerified && item.role === "Authorized") {
-                    userUids.push(item.uid) // filtered verified and excluded admin /users data
+                    userUids.push(item.uid) // filtered verified and excluded admin and unverified users data
                 }
             })
             userUids && userUids.map((uid, index) => {
